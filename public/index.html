@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marathi AI Voice Agent</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎙️</text></svg>">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+        :root{--bg:#08080e;--accent:#6c5ce7;--accent2:#a29bfe;--glow:rgba(108,92,231,.35);--text:#e8e6f0;--dim:#6a6880;--green:#00b894}
+        body{font-family:'Outfit',sans-serif;background:var(--bg);color:var(--text);height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;-webkit-font-smoothing:antialiased;user-select:none}
+        .ambient{position:fixed;inset:0;pointer-events:none;z-index:0;background:radial-gradient(ellipse 55% 45% at 50% 48%,rgba(108,92,231,.07) 0%,transparent 70%)}
+        .container{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;gap:48px}
+        .orb-area{position:relative;width:260px;height:260px;display:flex;align-items:center;justify-content:center;cursor:pointer;-webkit-tap-highlight-color:transparent}
+        .ring{position:absolute;width:140px;height:140px;left:50%;top:50%;transform:translate(-50%,-50%) scale(1);border-radius:50%;border:1.5px solid var(--accent);opacity:0;pointer-events:none}
+        .state-speaking .ring{animation:ringPulse 2.4s cubic-bezier(.22,.61,.36,1) infinite}
+        .ring:nth-child(2){animation-delay:.65s}.ring:nth-child(3){animation-delay:1.3s}
+        @keyframes ringPulse{0%{transform:translate(-50%,-50%) scale(1);opacity:.55}100%{transform:translate(-50%,-50%) scale(2.4);opacity:0}}
+        .orb{position:relative;width:140px;height:140px;border-radius:50%;background:radial-gradient(circle at 35% 30%,rgba(162,155,254,.55),var(--accent) 52%,#4530c9 100%);box-shadow:0 0 60px var(--glow),0 0 120px rgba(108,92,231,.12),inset 0 -10px 24px rgba(0,0,0,.35);z-index:2;transition:box-shadow .5s,background .8s}
+        .orb::after{content:'';position:absolute;top:16%;left:22%;width:30%;height:14%;background:radial-gradient(ellipse,rgba(255,255,255,.38),transparent);border-radius:50%;filter:blur(5px)}
+        .state-idle .orb{animation:breathe 4.5s ease-in-out infinite}
+        @keyframes breathe{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+        .state-passive .orb{animation:passiveBreathe 5s ease-in-out infinite;box-shadow:0 0 30px rgba(108,92,231,.15);opacity:.6}
+        @keyframes passiveBreathe{0%,100%{transform:scale(.97);opacity:.55}50%{transform:scale(1);opacity:.65}}
+        .state-wakeup .orb{animation:wakeFlash .5s ease-out;background:radial-gradient(circle at 35% 30%,rgba(0,230,180,.5),var(--green) 52%,#00997a 100%);box-shadow:0 0 80px rgba(0,184,148,.25)}
+        @keyframes wakeFlash{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1.05)}}
+        .state-listening .orb{animation:listenPulse 1.6s ease-in-out infinite alternate;box-shadow:0 0 60px rgba(108,92,231,.55),0 0 120px rgba(108,92,231,.25)}
+        @keyframes listenPulse{0%{box-shadow:0 0 60px rgba(108,92,231,.55),0 0 120px rgba(108,92,231,.25)}100%{box-shadow:0 0 80px rgba(108,92,231,.7),0 0 150px rgba(108,92,231,.35)}}
+        .state-thinking .orb{animation:float 2s ease-in-out infinite;box-shadow:0 0 80px var(--glow),0 24px 60px rgba(108,92,231,.18)}
+        @keyframes float{0%,100%{transform:translateY(0) scale(1.02)}50%{transform:translateY(-22px) scale(1.06)}}
+        .state-speaking .orb{animation:speak .85s ease-in-out infinite alternate;box-shadow:0 0 90px rgba(108,92,231,.5),0 0 180px rgba(108,92,231,.15)}
+        @keyframes speak{0%{transform:scale(1)}100%{transform:scale(1.1)}}
+        .waveform-wrap{position:absolute;width:340px;height:80px;bottom:10px;left:50%;transform:translateX(-50%);opacity:0;transition:opacity .35s;pointer-events:none}
+        .state-listening .waveform-wrap{opacity:1}
+        .waveform-wrap canvas{width:100%;height:100%}
+        .silence-track{position:absolute;bottom:-6px;left:50%;transform:translateX(-50%);width:140px;height:3px;background:rgba(108,92,231,.1);border-radius:3px;overflow:hidden;opacity:0;transition:opacity .3s}
+        .state-listening .silence-track{opacity:1}
+        .silence-fill{height:100%;width:0%;background:var(--accent);border-radius:3px;transition:width 80ms linear}
+        .status{text-align:center;display:flex;flex-direction:column;gap:8px;min-height:50px}
+        .status-main{font-size:1.05rem;font-weight:400;color:var(--dim);letter-spacing:.04em;transition:color .3s}
+        .state-passive .status-main{color:rgba(106,104,128,.4)}
+        .state-listening .status-main{color:var(--accent)}
+        .state-speaking .status-main{color:var(--accent2)}
+        .state-wakeup .status-main{color:var(--green)}
+        .hint{font-size:.76rem;color:rgba(106,104,128,.55);letter-spacing:.03em}
+        .transcript{font-size:.8rem;color:var(--dim);max-width:320px;text-align:center;min-height:20px;opacity:.7}
+        .title{position:fixed;top:32px;font-size:.8rem;font-weight:500;letter-spacing:.15em;text-transform:uppercase;color:var(--dim)}
+        .wake-badge{position:fixed;top:60px;font-size:.72rem;color:rgba(162,155,254,.4)}
+        .wake-badge strong{color:rgba(162,155,254,.7)}
+        .toast{position:fixed;bottom:100px;background:rgba(255,71,87,.1);border:1px solid rgba(255,71,87,.25);color:#ff6b81;padding:10px 22px;border-radius:10px;font-size:.82rem;opacity:0;transform:translateY(8px);transition:all .3s;pointer-events:none;z-index:10}
+        .toast.show{opacity:1;transform:translateY(0)}
+        .controls{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(18,18,26,.85);border:1px solid rgba(108,92,231,.15);border-radius:16px;padding:14px 22px;display:flex;flex-direction:column;gap:10px;width:340px;max-width:90vw;backdrop-filter:blur(12px);z-index:20}
+        .ctrl-row{display:flex;align-items:center;gap:10px}
+        .ctrl-label{font-size:.7rem;color:var(--dim);letter-spacing:.04em;min-width:64px;text-transform:uppercase}
+        .ctrl-slider{flex:1;-webkit-appearance:none;appearance:none;height:4px;background:rgba(108,92,231,.2);border-radius:4px;outline:none}
+        .ctrl-slider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;box-shadow:0 0 8px var(--glow)}
+        .ctrl-slider::-moz-range-thumb{width:16px;height:16px;border-radius:50%;background:var(--accent);cursor:pointer;border:none}
+        .ctrl-value{font-size:.7rem;color:var(--accent2);min-width:32px;text-align:right;font-variant-numeric:tabular-nums}
+        .meter-wrap{height:6px;flex:1;background:rgba(108,92,231,.1);border-radius:3px;overflow:hidden;position:relative}
+        .meter-fill{height:100%;background:var(--green);border-radius:3px;transition:width 60ms linear;width:0%}
+        .meter-thresh{position:absolute;top:0;height:100%;width:2px;background:#ff6b81;border-radius:1px}
+    </style>
+</head>
+<body>
+<div class="ambient"></div>
+<p class="title">मराठी Voice Agent</p>
+<p class="wake-badge" id="wakeBadge">Say <strong>"Hello Sarvam"</strong> or tap the orb</p>
+
+<div class="container">
+    <div class="orb-area state-idle" id="orbArea" onclick="handleTap()">
+        <div class="ring"></div><div class="ring"></div><div class="ring"></div>
+        <div class="orb"></div>
+        <div class="waveform-wrap"><canvas id="waveCanvas"></canvas></div>
+        <div class="silence-track"><div class="silence-fill" id="silFill"></div></div>
+    </div>
+    <div class="status">
+        <p class="status-main" id="sMain">Tap to start</p>
+        <p class="hint" id="sHint">One-time mic permission</p>
+    </div>
+    <p class="transcript" id="transcript"></p>
+</div>
+
+<div class="controls">
+    <div class="ctrl-row">
+        <span class="ctrl-label">Mic</span>
+        <div class="meter-wrap"><div class="meter-fill" id="meterFill"></div><div class="meter-thresh" id="meterThresh" style="left:30%"></div></div>
+    </div>
+    <div class="ctrl-row">
+        <span class="ctrl-label">Sensitivity</span>
+        <input type="range" class="ctrl-slider" id="sensSlider" min="1" max="10" step="1" value="5">
+        <span class="ctrl-value" id="sensVal">5</span>
+    </div>
+    <div class="ctrl-row">
+        <span class="ctrl-label">Pause</span>
+        <input type="range" class="ctrl-slider" id="pauseSlider" min="800" max="4000" step="200" value="1800">
+        <span class="ctrl-value" id="pauseVal">1.8s</span>
+    </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════
+//  API — relative paths (works on Vercel + localhost)
+// ═══════════════════════════════════════════
+const API_VOICE = '/api/voice-agent';
+const API_WAKE  = '/api/wake-check';
+
+// Wake words (only used client-side for display)
+const WAKE_WORDS = ['hello sarvam','hey sarvam','hi sarvam'];
+
+// ═══════════════════════════════════════════
+//  CONFIG
+// ═══════════════════════════════════════════
+let SENSITIVITY = 5, SILENCE_MS = 1800;
+const WAIT_FOR_SPEECH_MS = 6000;
+const MIN_REC = 500, MAX_REC = 15000, SPEECH_CONFIRM = 3;
+
+function sThresh(){ return 0.132 - (SENSITIVITY * 0.013) }
+function silThresh(){ return sThresh() * 0.5 }
+
+// ═══════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════
+let conversationActive=false, wakeMode=false, micInited=false;
+let recording=false, processing=false;
+let chunks=[], animId, monitorId, recStart, curAudio=null;
+let userHasSpoken=false, silStart=0, speechFrames=0;
+let audioCtx=null, analyser=null, micStream=null;
+let theRecorder=null, recMime='', onRecStop=null;
+
+// Client-side conversation history (serverless is stateless)
+let chatHistory = [];
+const MAX_HISTORY = 10;
+
+const $=id=>document.getElementById(id);
+const $area=$('orbArea'),$main=$('sMain'),$hint=$('sHint');
+const $canvas=$('waveCanvas'),cctx=$canvas.getContext('2d');
+const $sil=$('silFill'),$toast=$('toast'),$mFill=$('meterFill'),$mThresh=$('meterThresh'),$trans=$('transcript');
+
+$('sensSlider').oninput=function(){SENSITIVITY=+this.value;$('sensVal').textContent=this.value;$mThresh.style.left=Math.min(sThresh()/0.15*100,100)+'%'};
+$('pauseSlider').oninput=function(){SILENCE_MS=+this.value;$('pauseVal').textContent=(SILENCE_MS/1000).toFixed(1)+'s'};
+$mThresh.style.left=Math.min(sThresh()/0.15*100,100)+'%';
+
+function setState(s){
+    $area.className='orb-area state-'+s;
+    const m={idle:['Tap to start','One-time mic permission'],passive:['Say "Hello Sarvam"','Listening for wake word…'],wakeup:['Activated!',''],listening:['Listening…','Speak — auto-stops on pause'],thinking:['Thinking…',''],speaking:['Speaking…','Tap to interrupt']};
+    $main.textContent=m[s]?.[0]||'';$hint.textContent=m[s]?.[1]||'';
+}
+function toast(m){$toast.textContent=m;$toast.classList.add('show');setTimeout(()=>$toast.classList.remove('show'),4000)}
+
+// ═══════════════════════════════════════════
+//  INIT — one permission, forever
+// ═══════════════════════════════════════════
+async function initEverything(){
+    if(micInited)return true;
+    try{
+        audioCtx=new(window.AudioContext||window.webkitAudioContext)();
+        if(audioCtx.state==='suspended')await audioCtx.resume();
+        micStream=await navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}});
+        analyser=audioCtx.createAnalyser();analyser.fftSize=2048;analyser.smoothingTimeConstant=0.85;
+        audioCtx.createMediaStreamSource(micStream).connect(analyser);
+        recMime=MediaRecorder.isTypeSupported('audio/webm;codecs=opus')?'audio/webm;codecs=opus':MediaRecorder.isTypeSupported('audio/webm')?'audio/webm':MediaRecorder.isTypeSupported('audio/mp4')?'audio/mp4':'';
+        theRecorder=new MediaRecorder(micStream,recMime?{mimeType:recMime}:{});
+        theRecorder.ondataavailable=e=>{if(e.data.size>0)chunks.push(e.data)};
+        theRecorder.onstop=()=>{if(onRecStop)onRecStop()};
+        micInited=true;
+        (function meter(){const l=getRMS();$mFill.style.width=Math.min(l/0.15*100,100)+'%';$mFill.style.background=l>=sThresh()?'var(--accent)':'var(--green)';requestAnimationFrame(meter)})();
+        return true;
+    }catch(e){toast('Mic denied — allow and reload');return false}
+}
+
+// ═══════════════════════════════════════════
+//  RECORDING HELPERS
+// ═══════════════════════════════════════════
+function recordClip(ms){
+    return new Promise(resolve=>{
+        chunks=[];onRecStop=()=>resolve(new Blob(chunks,{type:theRecorder.mimeType||'audio/webm'}));
+        theRecorder.start(100);setTimeout(()=>{if(theRecorder.state!=='inactive')theRecorder.stop()},ms);
+    });
+}
+
+function recordWithVAD(){
+    return new Promise(resolve=>{
+        chunks=[];userHasSpoken=false;speechFrames=0;silStart=0;recStart=Date.now();recording=true;
+        onRecStop=()=>{recording=false;resolve({blob:new Blob(chunks,{type:theRecorder.mimeType||'audio/webm'}),spoke:userHasSpoken})};
+        theRecorder.start(100);setState('listening');initCanvas();drawWave();vadLoop();
+    });
+}
+
+function vadLoop(){
+    if(!recording)return;const level=getRMS(),elapsed=Date.now()-recStart;
+    if(!userHasSpoken){
+        if(level>=sThresh()){speechFrames++;if(speechFrames>=SPEECH_CONFIRM){userHasSpoken=true;silStart=0;$sil.style.width='0%'}}else speechFrames=0;
+        if(!userHasSpoken&&elapsed>=WAIT_FOR_SPEECH_MS){recording=false;if(theRecorder.state!=='inactive')theRecorder.stop();return}
+        monitorId=setTimeout(vadLoop,50);return;
+    }
+    if(level<silThresh()){if(!silStart)silStart=Date.now();const ms=Date.now()-silStart;$sil.style.width=Math.min(ms/SILENCE_MS*100,100)+'%';if(ms>=SILENCE_MS&&elapsed>=MIN_REC){recording=false;if(theRecorder.state!=='inactive')theRecorder.stop();return}}
+    else{silStart=0;$sil.style.width='0%'}
+    if(elapsed>=MAX_REC){recording=false;if(theRecorder.state!=='inactive')theRecorder.stop();return}
+    monitorId=setTimeout(vadLoop,50);
+}
+
+// ═══════════════════════════════════════════
+//  WAKE WORD LOOP
+// ═══════════════════════════════════════════
+async function wakeLoop(){
+    while(wakeMode&&!conversationActive){
+        setState('passive');
+        const got=await waitForEnergy(10000);
+        if(!wakeMode||conversationActive)break;
+        if(!got)continue;
+        const blob=await recordClip(2500);
+        if(!wakeMode||conversationActive)break;
+        if(blob.size<500)continue;
+        try{
+            const fd=new FormData();fd.append('audio',blob,`wake.${recMime.includes('mp4')?'mp4':'webm'}`);
+            const res=await fetch(API_WAKE,{method:'POST',body:fd});
+            if(res.ok){const d=await res.json();if(d.wake){wakeMode=false;startConversation();return}}
+        }catch(e){}
+    }
+}
+function waitForEnergy(ms){
+    return new Promise(resolve=>{
+        const t=Date.now();let c=0;
+        (function ck(){if(!wakeMode||conversationActive){resolve(false);return}if(Date.now()-t>ms){resolve(false);return}if(getRMS()>=sThresh()){c++;if(c>=2){resolve(true);return}}else c=0;setTimeout(ck,80)})();
+    });
+}
+function startWakeMode(){if(wakeMode)return;wakeMode=true;wakeLoop()}
+function stopWakeMode(){wakeMode=false}
+
+// ═══════════════════════════════════════════
+//  CONVERSATION
+// ═══════════════════════════════════════════
+async function startConversation(){
+    if(conversationActive)return;conversationActive=true;stopWakeMode();
+    setState('wakeup');await new Promise(r=>setTimeout(r,400));
+    conversationLoop();
+}
+
+async function conversationLoop(){
+    while(conversationActive){
+        clearTimeout(monitorId);cancelAnimationFrame(animId);$sil.style.width='0%';
+        const{blob,spoke}=await recordWithVAD();
+        if(!spoke||blob.size<500){conversationActive=false;startWakeMode();return}
+
+        processing=true;setState('thinking');
+        try{
+            const ext=recMime.includes('mp4')?'mp4':'webm';
+            const fd=new FormData();
+            fd.append('audio',blob,`recording.${ext}`);
+            // Send conversation history for context
+            fd.append('history',JSON.stringify(chatHistory));
+
+            const res=await fetch(API_VOICE,{method:'POST',body:fd});
+            if(res.status===204){processing=false;continue}
+            if(!res.ok){processing=false;toast('Server error');conversationActive=false;startWakeMode();return}
+
+            // Read transcript from headers
+            const userText=res.headers.get('X-Transcript')||'';
+            const botText=res.headers.get('X-Response')||'';
+            if(userText)$trans.textContent=`🎤 ${userText}`;
+
+            // Update client-side history
+            if(userText)chatHistory.push({role:'user',content:userText});
+            if(botText)chatHistory.push({role:'assistant',content:botText});
+            if(chatHistory.length>MAX_HISTORY*2)chatHistory=chatHistory.slice(-MAX_HISTORY*2);
+
+            const aBlob=await res.blob();
+            if(aBlob.size<100){processing=false;conversationActive=false;startWakeMode();return}
+
+            setState('speaking');
+            if(botText)setTimeout(()=>{$trans.textContent=`🤖 ${botText}`},300);
+            await playAudio(aBlob);
+            processing=false;
+        }catch(e){toast('Server unreachable');processing=false;conversationActive=false;startWakeMode();return}
+    }
+}
+
+function playAudio(blob){return new Promise(r=>{curAudio=new Audio(URL.createObjectURL(blob));curAudio.onended=()=>{curAudio=null;r()};curAudio.onerror=()=>{curAudio=null;r()};curAudio.play().catch(()=>{curAudio=null;r()})})}
+
+function endConversation(){
+    conversationActive=false;processing=false;recording=false;
+    if(theRecorder&&theRecorder.state!=='inactive')try{theRecorder.stop()}catch(e){}
+    if(curAudio){curAudio.pause();curAudio.currentTime=0;curAudio=null}
+    clearTimeout(monitorId);cancelAnimationFrame(animId);startWakeMode();
+}
+
+// ═══════════════════════════════════════════
+//  WAVEFORM + RMS
+// ═══════════════════════════════════════════
+function initCanvas(){const d=devicePixelRatio||1,r=$canvas.getBoundingClientRect();$canvas.width=r.width*d;$canvas.height=r.height*d;cctx.scale(d,d)}
+function drawWave(){
+    if(!analyser)return;const N=analyser.frequencyBinCount,buf=new Uint8Array(N);analyser.getByteTimeDomainData(buf);
+    const w=$canvas.getBoundingClientRect().width,h=$canvas.getBoundingClientRect().height;cctx.clearRect(0,0,w,h);
+    cctx.save();cctx.lineWidth=6;cctx.strokeStyle='rgba(108,92,231,.1)';cctx.filter='blur(6px)';cctx.beginPath();
+    let x=0,sw=w/N;for(let i=0;i<N;i++){const y=(buf[i]/128)*h/2;i?cctx.lineTo(x,y):cctx.moveTo(x,y);x+=sw}cctx.stroke();cctx.restore();
+    cctx.beginPath();cctx.lineWidth=2;cctx.strokeStyle='rgba(108,92,231,.75)';cctx.lineCap=cctx.lineJoin='round';x=0;
+    for(let i=0;i<N;i++){const y=(buf[i]/128)*h/2;i?cctx.lineTo(x,y):cctx.moveTo(x,y);x+=sw}cctx.stroke();
+    if(recording)animId=requestAnimationFrame(drawWave);else cctx.clearRect(0,0,w,h);
+}
+function getRMS(){if(!analyser)return 0;const d=new Float32Array(analyser.fftSize);analyser.getFloatTimeDomainData(d);let s=0;for(let i=0;i<d.length;i++)s+=d[i]*d[i];return Math.sqrt(s/d.length)}
+
+// ═══════════════════════════════════════════
+//  TAP
+// ═══════════════════════════════════════════
+async function handleTap(){
+    if(!micInited){if(!(await initEverything()))return;startConversation();return}
+    if(curAudio||conversationActive){endConversation();return}
+    startConversation();
+}
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&e.target===document.body){e.preventDefault();handleTap()}});
+</script>
+</body>
+</html>
